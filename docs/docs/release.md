@@ -41,13 +41,13 @@ Published artifacts are available as Docker images on [Docker Hub](https://hub.d
 | Image | Description |
 |-------|-------------|
 | `openmosaic/mosaic-vllm` | vLLM container with the Open Mosaic NCCL profiler plugin. |
-| `openmosaic/mosaic-gpu-pcie-exporter` | Prometheus exporter for GPU-to-PCIe port mapping. Discovers GPUs via `nvidia-smi` (NVIDIA) or `rocm-smi` (AMD) and exposes metrics with host, gpu_id, gpu_uuid, pcie_port, and vendor. See [GPU PCIe Exporter](https://github.com/open-mosaic/mosaic/blob/main/deployments/gpu_pcie_exporter/README.md) for build, run, and configuration details. |
+| `openmosaic/gpu-pcie-exporter` | Prometheus exporter for GPU-to-PCIe port mapping. Discovers GPUs via `nvidia-smi` (NVIDIA) or `rocm-smi` (AMD) and exposes metrics with host, gpu_id, gpu_uuid, pcie_port, and vendor. See [GPU PCIe Exporter](https://github.com/open-mosaic/mosaic/blob/main/deployments/gpu_pcie_exporter/README.md) for build, run, and configuration details. |
 | `openmosaic/pipeline-analyzer` | Pipeline analysis for the NCCL profiler: analyses Prometheus metrics to identify pipeline parallelism structure and how communicators form pipeline stages. See [Pipeline Analyzer](https://github.com/open-mosaic/mosaic/blob/main/deployments/pipeline-analyzer/analyze_pipelines.py) for behavior and usage. |
 
 Example (replace `1.0.0` with the desired version):
 
 ```bash
 docker pull openmosaic/mosaic-vllm:1.0.0
-docker pull openmosaic/mosaic-gpu-pcie-exporter:1.0.0
+docker pull openmosaic/gpu-pcie-exporter:1.0.0
 docker pull openmosaic/pipeline-analyzer:1.0.0
 ```

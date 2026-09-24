@@ -1,0 +1,198 @@
+# SPDX-FileCopyrightText: 2025 Delos Data Inc
+# SPDX-License-Identifier: Apache-2.0
+# Default values for the Mosaic Helm chart.
+
+nameOverride: ""
+fullnameOverride: ""
+
+imagePullSecrets: []
+
+# Mosaic observability stack (OpenTelemetry Collector, Prometheus, Loki, Tempo and Grafana)
+lgtm:
+  image:
+    repository: grafana/otel-lgtm
+    tag: latest
+    pullPolicy: IfNotPresent
+  service:
+    # Fixed name so workloads can reach the stack at http://mosaic-otel-lgtm:4318,
+    # matching the docker compose deployment.
+    name: mosaic-otel-lgtm
+    type: ClusterIP
+    annotations: {}
+  # Extra environment variables for the otel-lgtm container
+  extraEnv: []
+  resources: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  persistence:
+    # When disabled, telemetry data is lost when the pod restarts (same as docker compose).
+    enabled: false
+    storageClassName: ""
+    accessModes:
+      - ReadWriteOnce
+    size: 20Gi
+  prometheus:
+    # Discover the exporters deployed by this chart through the Kubernetes API.
+    kubernetesSd:
+      enabled: true
+    # Additional Prometheus scrape configs appended to files/prometheus.yaml
+    extraScrapeConfigs: []
+  # Prometheus file service discovery targets, for hosts outside the cluster.
+  # Each key becomes a file under /otel-lgtm/file_sd_configs/. The format is the
+  # same one produced by deployments/file_sd_configs/file-sd-config-generate.sh.
+  #   node1.yaml:
+  #     - targets: ["10.0.0.1:9100"]
+  #       labels:
+  #         job: node_exporter-node1
+  #         host: node1
+  fileSd: {}
+
+# Pipeline analyzer, scraped by Prometheus at pipeline-analyzer:5000
+pipelineAnalyzer:
+  enabled: true
+  image:
+    repository: openmosaic/pipeline-analyzer
+    # Leave empty to use the chart's appVersion
+    tag: ""
+    pullPolicy: IfNotPresent
+  resources: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+# System metrics exporter, deployed on every node
+nodeExporter:
+  enabled: true
+  image:
+    repository: prom/node-exporter
+    tag: v1.10.2
+    pullPolicy: IfNotPresent
+  # The exporter uses the host network. Change this if another node exporter
+  # (for example from kube-prometheus-stack) already listens on 9100.
+  port: 9100
+  resources: {}
+  nodeSelector: {}
+  tolerations:
+    - operator: Exists
+
+# Process metrics exporter, deployed on every node
+processExporter:
+  enabled: true
+  image:
+    repository: ncabatoff/process-exporter
+    tag: v0.8.7
+    pullPolicy: IfNotPresent
+  port: 9256
+  # Process matching configuration: nvidia (nccl-tests) or amd (rccl-tests)
+  vendor: nvidia
+  resources: {}
+  nodeSelector: {}
+  tolerations:
+    - operator: Exists
+
+# NVIDIA GPU monitoring
+nvidia:
+  enabled: true
+  dcgmExporter:
+    # Disable when the NVIDIA GPU Operator already deploys dcgm-exporter.
+    enabled: true
+    image:
+      repository: nvidia/dcgm-exporter
+      tag: 4.5.2-4.8.1-distroless
+      pullPolicy: IfNotPresent
+    port: 9400
+    # RuntimeClass that exposes GPUs to the container without requesting them
+    # through the device plugin. The NVIDIA GPU Operator creates "nvidia".
+    # Set to "" when nvidia is the default container runtime.
+    runtimeClassName: nvidia
+    resources: {}
+    # Label set by NVIDIA GPU Feature Discovery (part of the GPU Operator)
+    nodeSelector:
+      nvidia.com/gpu.present: "true"
+    tolerations:
+      - key: nvidia.com/gpu
+        operator: Exists
+        effect: NoSchedule
+
+# AMD GPU monitoring
+amd:
+  enabled: false
+  deviceExporter:
+    enabled: true
+    image:
+      repository: rocm/device-metrics-exporter
+      tag: v1.4.0
+      pullPolicy: IfNotPresent
+    port: 5000
+    resources: {}
+    # Label set by Node Feature Discovery (part of the AMD GPU Operator)
+    nodeSelector:
+      feature.node.kubernetes.io/amd-gpu: "true"
+    tolerations:
+      - key: amd.com/gpu
+        operator: Exists
+        effect: NoSchedule
+  # Maps GPUs to PCIe ports using rocm-smi from the host's /opt/rocm.
+  pcieExporter:
+    enabled: false
+    image:
+      repository: openmosaic/gpu-pcie-exporter
+      # Leave empty to use the chart's appVersion
+      tag: ""
+      pullPolicy: IfNotPresent
+    port: 8000
+    rocmPath: /opt/rocm
+    resources: {}
+    nodeSelector:
+      feature.node.kubernetes.io/amd-gpu: "true"
+    tolerations:
+      - key: amd.com/gpu
+        operator: Exists
+        effect: NoSchedule
+
+# vLLM reference workload with the Mosaic NCCL profiler plugin
+vllm:
+  enabled: true
+  image:
+    repository: openmosaic/mosaic-vllm
+    # Leave empty to use the chart's appVersion
+    tag: ""
+    pullPolicy: IfNotPresent
+  model: Qwen/Qwen3-8B
+  # API port, which also serves the vLLM Prometheus metrics
+  port: 8080
+  tensorParallelSize: 2
+  # Number of GPUs requested from the device plugin
+  gpus: 2
+  gpuResourceName: nvidia.com/gpu
+  extraArgs:
+    - --gpu-memory-utilization 0.8
+    - --disable-custom-all-reduce
+    - --enforce-eager
+    - --enable-mfu-metrics
+  env:
+    - name: VLLM_LOGGING_LEVEL
+      value: DEBUG
+  # Existing secret holding a Hugging Face token, needed for gated models
+  hfTokenSecret:
+    name: ""
+    key: token
+  # Size of the in-memory /dev/shm used by NCCL (replaces ipc: host)
+  shmSize: 16Gi
+  # Hugging Face model cache: pvc, hostPath or emptyDir
+  cache:
+    type: pvc
+    storageClassName: ""
+    size: 50Gi
+    hostPath: /var/cache/huggingface
+  service:
+    type: ClusterIP
+  runtimeClassName: ""
+  resources: {}
+  nodeSelector: {}
+  tolerations:
+    - key: nvidia.com/gpu
+      operator: Exists
+      effect: NoSchedule
+  affinity: {}

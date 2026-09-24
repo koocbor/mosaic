@@ -1,0 +1,18 @@
+# SPDX-FileCopyrightText: 2025 Delos Data Inc
+# SPDX-License-Identifier: Apache-2.0
+
+apiVersion: v2
+name: mosaic
+description: Mosaic observability stack, GPU/system exporters and vLLM reference workload for Kubernetes
+type: application
+version: 0.1.0
+appVersion: "1.0.1"
+kubeVersion: ">=1.25.0-0"
+home: https://github.com/open-mosaic/mosaic
+sources:
+  - https://github.com/open-mosaic/mosaic
+keywords:
+  - nccl
+  - gpu
+  - observability
+  - vllm
