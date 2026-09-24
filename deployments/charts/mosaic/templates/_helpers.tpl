@@ -93,6 +93,9 @@ discovery job and any extra scrape configs
 {{- if .Values.lgtm.prometheus.kubernetesSd.enabled }}
 {{- $scrapeConfigs = append $scrapeConfigs (include "mosaic.kubernetesScrapeConfig" . | fromYaml) }}
 {{- end }}
+{{- if and .Values.lgtm.prometheus.kubernetesSd.enabled .Values.nvidia.dcgmExporter.external.enabled }}
+{{- $scrapeConfigs = append $scrapeConfigs (include "mosaic.externalDcgmScrapeConfig" . | fromYaml) }}
+{{- end }}
 {{- range .Values.lgtm.prometheus.extraScrapeConfigs }}
 {{- $scrapeConfigs = append $scrapeConfigs . }}
 {{- end }}
@@ -141,4 +144,43 @@ relabel_configs:
     action: replace
     separator: "-"
     target_label: job
+{{- end }}
+
+{{/*
+Scrape job for an externally managed dcgm-exporter (for example the NVIDIA
+GPU Operator's), living outside the release namespace. Matches pods in
+nvidia.dcgmExporter.external.namespace by nvidia.dcgmExporter.external.podLabels
+and produces the same job label (gpu_exporter-<node>) as the built-in
+dcgm-exporter, so dashboards work unchanged regardless of the source.
+*/}}
+{{- define "mosaic.externalDcgmScrapeConfig" -}}
+{{- $external := .Values.nvidia.dcgmExporter.external }}
+job_name: gpu-operator-dcgm-exporter
+kubernetes_sd_configs:
+  - role: pod
+    namespaces:
+      names:
+        - {{ $external.namespace }}
+relabel_configs:
+  {{- range $k, $v := $external.podLabels }}
+  - source_labels: [__meta_kubernetes_pod_label_{{ regexReplaceAll "[^a-zA-Z0-9_]" $k "_" }}]
+    action: keep
+    regex: {{ $v | quote }}
+  {{- end }}
+  - source_labels: [__meta_kubernetes_pod_phase]
+    action: drop
+    regex: Pending|Succeeded|Failed
+  - source_labels: [__address__]
+    action: replace
+    regex: '([^:]+)(?::\d+)?'
+    replacement: '$1:{{ $external.port }}'
+    target_label: __address__
+  - source_labels: [__meta_kubernetes_pod_node_name]
+    action: replace
+    target_label: host
+  - source_labels: [__meta_kubernetes_pod_node_name]
+    action: replace
+    separator: "-"
+    target_label: job
+    replacement: gpu_exporter-$1
 {{- end }}
