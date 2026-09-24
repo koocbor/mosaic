@@ -60,6 +60,7 @@ intents
 ip
 keychain
 kowalski
+kubectl
 kubernetes
 lgtm
 libgrpc
@@ -78,6 +79,7 @@ misdiagnosis
 mpi
 mpirun
 ms
+multus
 natively
 ncabatoff
 nccl

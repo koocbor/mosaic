@@ -1,0 +1,162 @@
+# SPDX-FileCopyrightText: 2025 Delos Data Inc
+# SPDX-License-Identifier: Apache-2.0
+{{- if .Values.vllm.enabled }}
+{{- $vllm := .Values.vllm }}
+{{- if not (has $vllm.cache.type (list "pvc" "hostPath" "emptyDir")) }}
+{{- fail (printf "vllm.cache.type must be pvc, hostPath or emptyDir, got %q" $vllm.cache.type) }}
+{{- end }}
+{{- if eq $vllm.cache.type "pvc" }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "mosaic.fullname" . }}-vllm-cache
+  labels:
+    {{- include "mosaic.componentLabels" (dict "ctx" . "component" "vllm") | nindent 4 }}
+  annotations:
+    # Keep downloaded models when the release is uninstalled
+    helm.sh/resource-policy: keep
+spec:
+  accessModes:
+    - ReadWriteOnce
+  {{- with $vllm.cache.storageClassName }}
+  storageClassName: {{ . }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ $vllm.cache.size }}
+---
+{{- end }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "mosaic.fullname" . }}-vllm
+  labels:
+    {{- include "mosaic.componentLabels" (dict "ctx" . "component" "vllm") | nindent 4 }}
+spec:
+  replicas: 1
+  strategy:
+    # Release the GPUs before starting a replacement pod
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "mosaic.selectorLabels" (dict "ctx" . "component" "vllm") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "mosaic.componentLabels" (dict "ctx" . "component" "vllm") | nindent 8 }}
+      annotations:
+        # vLLM serves Prometheus metrics on its API port, scraped as job vllm-<node>
+        {{- include "mosaic.scrapeAnnotations" (dict "job" "vllm" "port" $vllm.port "interval" "10s" "timeout" "5s") | nindent 8 }}
+    spec:
+      {{- with $vllm.runtimeClassName }}
+      runtimeClassName: {{ . }}
+      {{- end }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: vllm
+          image: {{ include "mosaic.image" (dict "image" $vllm.image "ctx" $) }}
+          imagePullPolicy: {{ $vllm.image.pullPolicy }}
+          # The image entrypoint is /bin/bash -c
+          args:
+            - >-
+              vllm serve {{ $vllm.model }}
+              --port {{ $vllm.port }}
+              --tensor-parallel-size {{ $vllm.tensorParallelSize }}
+              {{- range $vllm.extraArgs }}
+              {{ . }}
+              {{- end }}
+          env:
+            - name: NCCL_PROFILER_OTEL_TELEMETRY_ENDPOINT
+              value: http://{{ .Values.lgtm.service.name }}:4318
+            {{- if $vllm.hfTokenSecret.name }}
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $vllm.hfTokenSecret.name }}
+                  key: {{ $vllm.hfTokenSecret.key }}
+            {{- end }}
+            {{- with $vllm.env }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          ports:
+            - name: http
+              containerPort: {{ $vllm.port }}
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            # Allow up to 30 minutes for the model download and loading
+            periodSeconds: 30
+            failureThreshold: 60
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 10
+          resources:
+            {{- $resources := deepCopy ($vllm.resources | default dict) }}
+            {{- $limits := get $resources "limits" | default dict }}
+            {{- $_ := set $limits $vllm.gpuResourceName $vllm.gpus }}
+            {{- $_ := set $resources "limits" $limits }}
+            {{- toYaml $resources | nindent 12 }}
+          volumeMounts:
+            - name: shm
+              mountPath: /dev/shm
+            - name: hf-cache
+              mountPath: /root/.cache/huggingface
+      volumes:
+        # NCCL uses shared memory between the tensor parallel workers
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: {{ $vllm.shmSize }}
+        - name: hf-cache
+          {{- if eq $vllm.cache.type "pvc" }}
+          persistentVolumeClaim:
+            claimName: {{ include "mosaic.fullname" . }}-vllm-cache
+          {{- else if eq $vllm.cache.type "hostPath" }}
+          hostPath:
+            path: {{ $vllm.cache.hostPath }}
+            type: DirectoryOrCreate
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+      {{- with $vllm.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $vllm.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $vllm.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "mosaic.fullname" . }}-vllm
+  labels:
+    {{- include "mosaic.componentLabels" (dict "ctx" . "component" "vllm") | nindent 4 }}
+spec:
+  type: {{ $vllm.service.type }}
+  selector:
+    {{- include "mosaic.selectorLabels" (dict "ctx" . "component" "vllm") | nindent 4 }}
+  ports:
+    - name: http
+      port: {{ $vllm.port }}
+      targetPort: http
+{{- end }}

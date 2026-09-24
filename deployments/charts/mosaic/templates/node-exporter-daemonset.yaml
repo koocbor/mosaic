@@ -1,0 +1,75 @@
+# SPDX-FileCopyrightText: 2025 Delos Data Inc
+# SPDX-License-Identifier: Apache-2.0
+{{- if .Values.nodeExporter.enabled }}
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: {{ include "mosaic.fullname" . }}-node-exporter
+  labels:
+    {{- include "mosaic.componentLabels" (dict "ctx" . "component" "node-exporter") | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "mosaic.selectorLabels" (dict "ctx" . "component" "node-exporter") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "mosaic.componentLabels" (dict "ctx" . "component" "node-exporter") | nindent 8 }}
+      annotations:
+        {{- include "mosaic.scrapeAnnotations" (dict "job" "node_exporter" "port" .Values.nodeExporter.port) | nindent 8 }}
+    spec:
+      # Host network and PID namespace so network, InfiniBand and uname
+      # metrics describe the node rather than the pod
+      hostNetwork: true
+      hostPID: true
+      dnsPolicy: ClusterFirstWithHostNet
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: node-exporter
+          image: {{ include "mosaic.image" (dict "image" .Values.nodeExporter.image "ctx" $) }}
+          imagePullPolicy: {{ .Values.nodeExporter.image.pullPolicy }}
+          args:
+            - --path.procfs=/host/proc
+            - --path.rootfs=/rootfs
+            - --path.sysfs=/host/sys
+            - --collector.filesystem.mount-points-exclude=^/(sys|proc|dev|run|snapd|var/snap|snap)($|/)
+            - --web.listen-address=:{{ .Values.nodeExporter.port }}
+          ports:
+            - name: metrics
+              containerPort: {{ .Values.nodeExporter.port }}
+          {{- with .Values.nodeExporter.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: proc
+              mountPath: /host/proc
+              readOnly: true
+            - name: sys
+              mountPath: /host/sys
+              readOnly: true
+            - name: rootfs
+              mountPath: /rootfs
+              readOnly: true
+      volumes:
+        - name: proc
+          hostPath:
+            path: /proc
+        - name: sys
+          hostPath:
+            path: /sys
+        - name: rootfs
+          hostPath:
+            path: /
+      {{- with .Values.nodeExporter.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.nodeExporter.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

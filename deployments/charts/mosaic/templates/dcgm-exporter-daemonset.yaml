@@ -1,0 +1,58 @@
+# SPDX-FileCopyrightText: 2025 Delos Data Inc
+# SPDX-License-Identifier: Apache-2.0
+{{- if and .Values.nvidia.enabled .Values.nvidia.dcgmExporter.enabled }}
+{{- $dcgm := .Values.nvidia.dcgmExporter }}
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: {{ include "mosaic.fullname" . }}-dcgm-exporter
+  labels:
+    {{- include "mosaic.componentLabels" (dict "ctx" . "component" "dcgm-exporter") | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "mosaic.selectorLabels" (dict "ctx" . "component" "dcgm-exporter") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "mosaic.componentLabels" (dict "ctx" . "component" "dcgm-exporter") | nindent 8 }}
+      annotations:
+        {{- include "mosaic.scrapeAnnotations" (dict "job" "gpu_exporter" "port" $dcgm.port "interval" "10s" "timeout" "5s") | nindent 8 }}
+    spec:
+      {{- with $dcgm.runtimeClassName }}
+      runtimeClassName: {{ . }}
+      {{- end }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: dcgm-exporter
+          image: {{ include "mosaic.image" (dict "image" $dcgm.image "ctx" $) }}
+          imagePullPolicy: {{ $dcgm.image.pullPolicy }}
+          env:
+            # Monitor every GPU on the node without allocating them
+            - name: NVIDIA_VISIBLE_DEVICES
+              value: all
+            - name: DCGM_EXPORTER_LISTEN
+              value: ":{{ $dcgm.port }}"
+          ports:
+            - name: metrics
+              containerPort: {{ $dcgm.port }}
+          securityContext:
+            capabilities:
+              add:
+                - SYS_ADMIN
+          {{- with $dcgm.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      {{- with $dcgm.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $dcgm.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

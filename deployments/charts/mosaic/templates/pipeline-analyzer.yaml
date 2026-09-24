@@ -1,0 +1,77 @@
+# SPDX-FileCopyrightText: 2025 Delos Data Inc
+# SPDX-License-Identifier: Apache-2.0
+{{- if .Values.pipelineAnalyzer.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "mosaic.fullname" . }}-pipeline-analyzer
+  labels:
+    {{- include "mosaic.componentLabels" (dict "ctx" . "component" "pipeline-analyzer") | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "mosaic.selectorLabels" (dict "ctx" . "component" "pipeline-analyzer") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "mosaic.componentLabels" (dict "ctx" . "component" "pipeline-analyzer") | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: pipeline-analyzer
+          image: {{ include "mosaic.image" (dict "image" .Values.pipelineAnalyzer.image "ctx" $) }}
+          imagePullPolicy: {{ .Values.pipelineAnalyzer.image.pullPolicy }}
+          env:
+            - name: METRICS_ENDPOINT
+              value: http://{{ .Values.lgtm.service.name }}:8889/metrics
+            - name: PORT
+              value: "5000"
+          ports:
+            - name: http
+              containerPort: 5000
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 30
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 30
+          {{- with .Values.pipelineAnalyzer.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      {{- with .Values.pipelineAnalyzer.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.pipelineAnalyzer.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.pipelineAnalyzer.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  # Name is fixed because files/prometheus.yaml scrapes pipeline-analyzer:5000
+  name: pipeline-analyzer
+  labels:
+    {{- include "mosaic.componentLabels" (dict "ctx" . "component" "pipeline-analyzer") | nindent 4 }}
+spec:
+  selector:
+    {{- include "mosaic.selectorLabels" (dict "ctx" . "component" "pipeline-analyzer") | nindent 4 }}
+  ports:
+    - name: http
+      port: 5000
+      targetPort: http
+{{- end }}

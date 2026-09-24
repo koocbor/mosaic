@@ -1,0 +1,23 @@
+{{- /*
+SPDX-FileCopyrightText: 2025 Delos Data Inc
+SPDX-License-Identifier: Apache-2.0
+*/ -}}
+Mosaic is deployed in namespace {{ .Release.Namespace }}.
+
+Open Grafana:
+
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ .Values.lgtm.service.name }} 3000:3000
+
+  then browse to http://localhost:3000
+
+Workloads send NCCL profiler telemetry to:
+
+  http://{{ .Values.lgtm.service.name }}.{{ .Release.Namespace }}.svc:4318
+{{- if .Values.vllm.enabled }}
+
+The vLLM reference workload downloads and loads {{ .Values.vllm.model }}, which can take several minutes:
+
+  kubectl -n {{ .Release.Namespace }} rollout status deploy/{{ include "mosaic.fullname" . }}-vllm --timeout=30m
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "mosaic.fullname" . }}-vllm {{ .Values.vllm.port }}:{{ .Values.vllm.port }}
+  curl -s localhost:{{ .Values.vllm.port }}/v1/models
+{{- end }}

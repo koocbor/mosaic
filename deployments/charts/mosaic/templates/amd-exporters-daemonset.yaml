@@ -1,0 +1,131 @@
+# SPDX-FileCopyrightText: 2025 Delos Data Inc
+# SPDX-License-Identifier: Apache-2.0
+{{- if and .Values.amd.enabled .Values.amd.deviceExporter.enabled }}
+{{- $exporter := .Values.amd.deviceExporter }}
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: {{ include "mosaic.fullname" . }}-amd-device-exporter
+  labels:
+    {{- include "mosaic.componentLabels" (dict "ctx" . "component" "amd-device-exporter") | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "mosaic.selectorLabels" (dict "ctx" . "component" "amd-device-exporter") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "mosaic.componentLabels" (dict "ctx" . "component" "amd-device-exporter") | nindent 8 }}
+      annotations:
+        {{- include "mosaic.scrapeAnnotations" (dict "job" "gpu_exporter" "port" $exporter.port "interval" "10s" "timeout" "5s") | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: amd-device-exporter
+          image: {{ include "mosaic.image" (dict "image" $exporter.image "ctx" $) }}
+          imagePullPolicy: {{ $exporter.image.pullPolicy }}
+          ports:
+            - name: metrics
+              containerPort: {{ $exporter.port }}
+          securityContext:
+            # Needed to access /dev/kfd and /dev/dri
+            privileged: true
+          {{- with $exporter.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: dev-kfd
+              mountPath: /dev/kfd
+            - name: dev-dri
+              mountPath: /dev/dri
+      volumes:
+        - name: dev-kfd
+          hostPath:
+            path: /dev/kfd
+        - name: dev-dri
+          hostPath:
+            path: /dev/dri
+      {{- with $exporter.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $exporter.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}
+{{- if and .Values.amd.enabled .Values.amd.pcieExporter.enabled }}
+{{- $pcie := .Values.amd.pcieExporter }}
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: {{ include "mosaic.fullname" . }}-gpu-pcie-exporter
+  labels:
+    {{- include "mosaic.componentLabels" (dict "ctx" . "component" "gpu-pcie-exporter") | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "mosaic.selectorLabels" (dict "ctx" . "component" "gpu-pcie-exporter") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "mosaic.componentLabels" (dict "ctx" . "component" "gpu-pcie-exporter") | nindent 8 }}
+      annotations:
+        {{- include "mosaic.scrapeAnnotations" (dict "job" "gpu_pcie_exporter" "port" $pcie.port) | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: gpu-pcie-exporter
+          image: {{ include "mosaic.image" (dict "image" $pcie.image "ctx" $) }}
+          imagePullPolicy: {{ $pcie.image.pullPolicy }}
+          args: ["python3", "gpu_pcie_exporter.py", "--port", "{{ $pcie.port }}"]
+          env:
+            # Keep the container's Python first, then the host ROCm tools
+            - name: PATH
+              value: /usr/local/bin:/opt/rocm/bin:/usr/bin:/usr/sbin:/bin:/sbin
+            - name: LD_LIBRARY_PATH
+              value: /opt/rocm/lib:/usr/lib:/usr/local/lib
+          ports:
+            - name: metrics
+              containerPort: {{ $pcie.port }}
+          securityContext:
+            privileged: true
+          {{- with $pcie.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: rocm
+              mountPath: /opt/rocm
+              readOnly: true
+            - name: dev-kfd
+              mountPath: /dev/kfd
+            - name: dev-dri
+              mountPath: /dev/dri
+      volumes:
+        - name: rocm
+          hostPath:
+            path: {{ $pcie.rocmPath }}
+        - name: dev-kfd
+          hostPath:
+            path: /dev/kfd
+        - name: dev-dri
+          hostPath:
+            path: /dev/dri
+      {{- with $pcie.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $pcie.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

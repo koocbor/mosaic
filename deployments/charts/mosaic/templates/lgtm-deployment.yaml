@@ -1,0 +1,131 @@
+# SPDX-FileCopyrightText: 2025 Delos Data Inc
+# SPDX-License-Identifier: Apache-2.0
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "mosaic.fullname" . }}-otel-lgtm
+  labels:
+    {{- include "mosaic.componentLabels" (dict "ctx" . "component" "otel-lgtm") | nindent 4 }}
+spec:
+  replicas: 1
+  strategy:
+    # Single instance with local storage
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "mosaic.selectorLabels" (dict "ctx" . "component" "otel-lgtm") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "mosaic.componentLabels" (dict "ctx" . "component" "otel-lgtm") | nindent 8 }}
+      annotations:
+        # Config files are mounted with subPath, so restart the pod when they change
+        checksum/config: {{ include (print $.Template.BasePath "/lgtm-configmaps.yaml") . | sha256sum }}
+    spec:
+      serviceAccountName: {{ include "mosaic.fullname" . }}-otel-lgtm
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: otel-lgtm
+          image: {{ include "mosaic.image" (dict "image" .Values.lgtm.image "ctx" $) }}
+          imagePullPolicy: {{ .Values.lgtm.image.pullPolicy }}
+          env:
+            - name: GF_DASHBOARDS_MIN_REFRESH_INTERVAL
+              value: 1s
+            - name: GF_AUTH_ANONYMOUS_ENABLED
+              value: "true"
+            - name: GF_AUTH_ANONYMOUS_ORG_ROLE
+              value: Admin
+            {{- with .Values.lgtm.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          ports:
+            - name: grafana
+              containerPort: 3000
+            - name: loki
+              containerPort: 3100
+            - name: otlp-grpc
+              containerPort: 4317
+            - name: otlp-http
+              containerPort: 4318
+            - name: otel-metrics
+              containerPort: 8889
+            - name: prometheus
+              containerPort: 9090
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: grafana
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          {{- with .Values.lgtm.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            # Same paths as deployments/docker-compose.yml
+            - name: config
+              mountPath: /otel-lgtm/otelcol-config.yaml
+              subPath: otelcol-config.yaml
+            - name: config
+              mountPath: /otel-lgtm/prometheus.yaml
+              subPath: prometheus.yaml
+            - name: config
+              mountPath: /otel-lgtm/loki-config.yaml
+              subPath: loki-config.yaml
+            - name: config
+              mountPath: /otel-lgtm/recording-rules.yaml
+              subPath: recording-rules.yaml
+            - name: config
+              mountPath: /etc/grafana/grafana.ini
+              subPath: grafana.ini
+            - name: config
+              mountPath: /otel-lgtm/grafana/conf/provisioning/dashboards/dashboards.yml
+              subPath: dashboards.yml
+            - name: dashboards
+              mountPath: /var/lib/grafana/dashboards
+              readOnly: true
+            {{- if .Values.lgtm.fileSd }}
+            - name: file-sd
+              mountPath: /otel-lgtm/file_sd_configs
+              readOnly: true
+            {{- end }}
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "mosaic.fullname" . }}-otel-lgtm-config
+        - name: dashboards
+          projected:
+            sources:
+              {{- range $path, $_ := .Files.Glob "files/dashboards/*.json" }}
+              - configMap:
+                  name: {{ include "mosaic.fullname" $ }}-dashboard-{{ base $path | trimSuffix ".json" | replace "_" "-" }}
+              {{- end }}
+        {{- if .Values.lgtm.fileSd }}
+        - name: file-sd
+          configMap:
+            name: {{ include "mosaic.fullname" . }}-file-sd
+        {{- end }}
+        - name: data
+          {{- if .Values.lgtm.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "mosaic.fullname" . }}-otel-lgtm-data
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+      {{- with .Values.lgtm.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.lgtm.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.lgtm.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

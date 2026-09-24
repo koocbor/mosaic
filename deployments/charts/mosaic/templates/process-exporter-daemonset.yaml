@@ -1,0 +1,78 @@
+# SPDX-FileCopyrightText: 2025 Delos Data Inc
+# SPDX-License-Identifier: Apache-2.0
+{{- if .Values.processExporter.enabled }}
+{{- $configFile := printf "files/process-exporter/%s.config.yml" .Values.processExporter.vendor }}
+{{- $config := .Files.Get $configFile }}
+{{- if not $config }}
+{{- fail (printf "processExporter.vendor must be nvidia or amd, got %q" .Values.processExporter.vendor) }}
+{{- end }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "mosaic.fullname" . }}-process-exporter
+  labels:
+    {{- include "mosaic.componentLabels" (dict "ctx" . "component" "process-exporter") | nindent 4 }}
+data:
+  config.yml: |-
+    {{- $config | nindent 4 }}
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: {{ include "mosaic.fullname" . }}-process-exporter
+  labels:
+    {{- include "mosaic.componentLabels" (dict "ctx" . "component" "process-exporter") | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "mosaic.selectorLabels" (dict "ctx" . "component" "process-exporter") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "mosaic.componentLabels" (dict "ctx" . "component" "process-exporter") | nindent 8 }}
+      annotations:
+        {{- include "mosaic.scrapeAnnotations" (dict "job" "process_exporter" "port" .Values.processExporter.port) | nindent 8 }}
+        checksum/config: {{ $config | sha256sum }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: process-exporter
+          image: {{ include "mosaic.image" (dict "image" .Values.processExporter.image "ctx" $) }}
+          imagePullPolicy: {{ .Values.processExporter.image.pullPolicy }}
+          args:
+            - -config.path=/etc/process-exporter/config.yml
+            - -procfs=/host/proc
+            - -web.listen-address=:{{ .Values.processExporter.port }}
+          ports:
+            - name: metrics
+              containerPort: {{ .Values.processExporter.port }}
+          {{- with .Values.processExporter.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: proc
+              mountPath: /host/proc
+              readOnly: true
+            - name: config
+              mountPath: /etc/process-exporter
+              readOnly: true
+      volumes:
+        - name: proc
+          hostPath:
+            path: /proc
+        - name: config
+          configMap:
+            name: {{ include "mosaic.fullname" . }}-process-exporter
+      {{- with .Values.processExporter.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.processExporter.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}
