@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: 2025 Delos Data Inc
 # SPDX-License-Identifier: Apache-2.0
-{{- if and .Values.nvidia.enabled .Values.nvidia.dcgmExporter.enabled }}
+{{- if and .Values.nvidia.enabled .Values.nvidia.dcgmExporter.enabled (not .Values.nvidia.dcgmExporter.external.enabled) }}
 {{- $dcgm := .Values.nvidia.dcgmExporter }}
 apiVersion: apps/v1
 kind: DaemonSet

@@ -95,7 +95,10 @@ processExporter:
 nvidia:
   enabled: true
   dcgmExporter:
-    # Disable when the NVIDIA GPU Operator already deploys dcgm-exporter.
+    # Deploy dcgm-exporter as part of this chart, in the release namespace.
+    # Set to false, and set external.enabled to true below, when scraping an
+    # externally managed dcgm-exporter instead (for example the NVIDIA GPU
+    # Operator's). external.enabled: true implies this is skipped.
     enabled: true
     image:
       repository: nvidia/dcgm-exporter
@@ -114,6 +117,22 @@ nvidia:
       - key: nvidia.com/gpu
         operator: Exists
         effect: NoSchedule
+    # Scrape an externally managed dcgm-exporter instead of deploying one.
+    # Useful when the NVIDIA GPU Operator already runs dcgm-exporter, since
+    # it normally lives outside the release namespace and would otherwise be
+    # invisible to this chart's Kubernetes service discovery (scoped to the
+    # release namespace) and its RBAC (also scoped to the release namespace).
+    # Produces the same job label (gpu_exporter-<node>) as the built-in
+    # dcgm-exporter, so the dashboards work unchanged.
+    external:
+      enabled: false
+      # Namespace the external dcgm-exporter pods run in
+      namespace: gpu-operator
+      # Label selector matching the external dcgm-exporter pods
+      podLabels:
+        app: nvidia-dcgm-exporter
+      # Metrics port exposed by the external dcgm-exporter
+      port: 9400
 
 # AMD GPU monitoring
 amd:

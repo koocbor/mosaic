@@ -50,7 +50,10 @@ Node and process exporters run on every node, and the GPU exporter runs on GPU n
 Prometheus discovers them, and the vLLM metrics endpoint, through the Kubernetes API, so no scrape configuration needs to be generated.
 
 !!! tip
-    If the GPU Operator already runs dcgm-exporter, add `--set nvidia.dcgmExporter.enabled=false`.
+    If the GPU Operator already runs dcgm-exporter, scrape it instead of deploying a second one with
+    `--set nvidia.dcgmExporter.external.enabled=true`. The GPU Operator's dcgm-exporter normally runs
+    in its own namespace (`gpu-operator` by default), so also set
+    `--set nvidia.dcgmExporter.external.namespace=<namespace>` if it differs.
     For AMD GPUs, use `--set nvidia.enabled=false,amd.enabled=true,processExporter.vendor=amd`.
     See the [chart README](https://github.com/open-mosaic/mosaic/blob/main/deployments/charts/mosaic/README.md) for all options.
 
