@@ -1,5 +1,5 @@
 ---
-icon: fontawesome/solid/rocket
+icon: fontawesome/brands/docker
 title: Quick Start on Docker
 ---
 
