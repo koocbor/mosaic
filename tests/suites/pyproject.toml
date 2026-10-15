@@ -14,8 +14,12 @@ dependencies = [
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["."]
+log_cli = true
+log_cli_level = "INFO"
 python_files = "test_*.py"
 python_functions = "test_*"
+# Report sections, most specific first: a test is filed under the first one it carries.
+report_category_markers = ["profiler_otel", "dashboards"]
 filterwarnings = [
     'ignore:This process .* is multi-threaded, use of fork\(\) may lead to deadlocks in the child:DeprecationWarning',
 ]
