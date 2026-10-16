@@ -18,23 +18,37 @@ from production_test_framework.reporting.environment import (
     profile_rows,
     run_rows,
 )
+from production_test_framework.workload.inferencex_workload import InferencexMode
 
 from profiler_otel import profiles
 
 __all__ = ["environment_rows"]
 
 
-def environment_rows(config, profile: profiles.Profile, prometheus_url: str, grafana_url: str) -> list[list[str]]:
+def environment_rows(
+    config,
+    profile: profiles.Profile,
+    inferencex_mode: InferencexMode,
+    prometheus_url: str,
+    grafana_url: str,
+) -> list[list[str]]:
     """
     What this run was pointed at, as (property, value) rows for the report's top table.
     """
     spec = profile.model_dump(mode="json")
 
-    override = [f"{key}={os.environ[key]}" for key in ("VLLM_HOST", "VLLM_PORT") if key in os.environ]
-    endpoint = endpoint_address(spec) + (f"  (overridden: {', '.join(override)})" if override else "")
-    deployment = "external" if profile.is_external else f"compose: {display_path(profile.compose_file)}"
+    override = [
+        f"{key}={os.environ[key]}" for key in ("VLLM_HOST", "VLLM_PORT") if key in os.environ
+    ]
+    endpoint = endpoint_address(spec) + (
+        f"  (overridden: {', '.join(override)})" if override else ""
+    )
+    deployment = (
+        "external" if profile.is_external else f"compose: {display_path(profile.compose_file)}"
+    )
 
     rows = profile_rows(spec, prometheus_url, grafana_url, endpoint=endpoint, deployment=deployment)
+    rows.append(["InferenceX mode", inferencex_mode.value])
     # The rootdir's checkout is this suite's, which is the code under test even when another
     # repository's Makefile cloned it and drove the run.
     return rows + run_rows(config) + gpu_rows(profile_host(spec))

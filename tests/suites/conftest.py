@@ -4,6 +4,10 @@
 import os
 
 import pytest
+from production_test_framework.workload.inferencex_workload import (
+    DEFAULT_INFERENCEX_MODE,
+    InferencexMode,
+)
 
 pytest_plugins = ["production_test_framework.reporting.report_plugin"]
 
@@ -35,12 +39,25 @@ def pytest_addoption(parser):
             "private repo can supply its own profiles without forking this suite."
         ),
     )
+    group.addoption(
+        "--inferencex-mode",
+        action="store",
+        default=DEFAULT_INFERENCEX_MODE.value,
+        choices=[mode.value for mode in InferencexMode],
+        help=(
+            "Load shape for the InferenceX workload: 'fixed' runs the profile's "
+            "benchmark_options as written; 'agentic' layers its agentic_options over them "
+            f"(default: {DEFAULT_INFERENCEX_MODE.value})."
+        ),
+    )
 
 
 def pytest_configure(config):
     """Register custom markers to avoid warnings."""
     config.addinivalue_line("markers", "profiler_otel: marks tests as NCCL profiler OTEL tests")
-    config.addinivalue_line("markers", "dashboards: marks tests as Grafana dashboards integration tests")
+    config.addinivalue_line(
+        "markers", "dashboards: marks tests as Grafana dashboards integration tests"
+    )
 
 
 @pytest.fixture(scope="session")
