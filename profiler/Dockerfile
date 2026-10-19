@@ -5,16 +5,17 @@
 
 # To build:
 #   docker build -t openmosaic/mosaic-vllm:dev -f Dockerfile .
-# CUDA 13.0 base (vllm/vllm-openai:*-cu130):
-#   docker build -t openmosaic/mosaic-vllm:cu130 --build-arg VLLM_BASE_TAG=v0.19.0-cu130 -f Dockerfile .
+# The default vLLM base (vllm/vllm-openai:<version>) is CUDA 13.0.
+# CUDA 12.9 base (vllm/vllm-openai:*-cu129):
+#   docker build -t openmosaic/mosaic-vllm:cu129 --build-arg VLLM_BASE_TAG=v0.32.0-cu129 -f Dockerfile .
 # To build with specific NCCL tag:
 #   docker build -t openmosaic/mosaic-vllm:dev --build-arg NCCL_TAG=<nccl-tag> -f Dockerfile .
 # To run:
 #   docker run -it --rm openmosaic/mosaic-vllm:dev ray ...
 
-ARG NCCL_TAG=2.29.2-1
+ARG NCCL_TAG=2.32.3-1
 ARG OTEL_CPP_VERSION=v1.25.0
-ARG VLLM_BASE_TAG=v0.19.0
+ARG VLLM_BASE_TAG=v0.32.0
 
 # =============================================================================
 # vLLM base + build OTel, NCCL, plugin + install Ray
@@ -92,6 +93,13 @@ RUN pip install --upgrade python-multipart==0.0.27 urllib3==2.7.0 uv==0.11.14
 
 # --- Install Ray (Python) ---
 RUN pip install "ray[default]==2.55.0"
+
+# --- Pin the pip NCCL wheel (nvidia-nccl-cu12/cu13) to match the NCCL built above ---
+# torch loads its own pip NCCL, which may take precedence over /usr/local/plugins/lib.
+# --no-deps leaves torch untouched; pip will warn that torch pins an older NCCL.
+RUN NCCL_PKG=$(pip list --format=freeze | grep -o '^nvidia-nccl-cu[0-9]*') && \
+    test -n "${NCCL_PKG}" && \
+    pip install --no-deps "${NCCL_PKG}==${NCCL_TAG%-*}"
 
 RUN mkdir -p /usr/local/plugins/lib
 
