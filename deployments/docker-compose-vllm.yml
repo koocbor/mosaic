@@ -13,6 +13,13 @@ services:
     environment:
       - NCCL_PROFILER_OTEL_TELEMETRY_ENDPOINT=http://172.17.0.1:4318
       - VLLM_LOGGING_LEVEL=DEBUG
+      # vLLM uses FlashInfer allreduce by default (as of v0.29.0).
+      # Disable to use NCCL and include allreduce metrics in profiler.
+      - VLLM_ALLREDUCE_USE_FLASHINFER=0
+      # Uncomment if the GPU used supports symmetric-memory allreduce.
+      # - VLLM_ALLREDUCE_USE_SYMM_MEM=0
+      # Uncomment if vLLM hangs on "Waiting for 1 local, 0 remote core engine proc(s)."
+      # - NCCL_P2P_DISABLE=1
     deploy:
       resources:
         reservations:
@@ -22,7 +29,7 @@ services:
               capabilities: [gpu]
     # Required for multi-GPU NCCL communication
     ipc: host
-    command: ["vllm serve Qwen/Qwen3-8B --port 8080 --tensor-parallel-size 2 --gpu-memory-utilization 0.8 --disable-custom-all-reduce --enforce-eager --enable-mfu-metrics"]
+    command: ["vllm serve Qwen/Qwen3-8B --port 8080 --tensor-parallel-size 2 --gpu-memory-utilization 0.8 --disable-custom-all-reduce --enable-mfu-metrics"]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
