@@ -80,6 +80,10 @@ RUN pip install --upgrade pip
 # --- Upgrade packages to the latest version ---
 RUN apt-get update && apt-get upgrade -y
 
+# --- Runtime libraries for the profiler plugin (protobuf comes from libgrpc++-dev in the builder) ---
+RUN apt-get install -y --no-install-recommends libprotobuf32t64 && \
+    rm -rf /var/lib/apt/lists/*
+
 # --- Manually install Ray dependencies to avoid CVE-2026-0994 ---
 RUN pip install --upgrade protobuf==6.33.5
 
@@ -108,6 +112,9 @@ COPY --from=builder /tmp/nccl/build/lib/* /usr/local/plugins/lib/
 COPY --from=builder /tmp/nccl-profiler-otel-plugin/build/libnccl-profiler-otel.so /usr/local/plugins/lib/
 
 RUN ( ldconfig || true )
+
+# --- Fail the build if the plugin has unresolved shared libraries (NCCL would silently skip it) ---
+RUN ! LD_LIBRARY_PATH=/usr/local/plugins/lib ldd /usr/local/plugins/lib/libnccl-profiler-otel.so | grep "not found"
 
 # --- Set environment variables ---
 ENV NCCL_VERSION=${NCCL_TAG}
