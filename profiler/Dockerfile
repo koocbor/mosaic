@@ -89,7 +89,7 @@ RUN pip install --upgrade protobuf==6.33.5
 
 # --- Manually install cryptography and pillow to avoid CVE-2026-26007, CVE-2026-25990 ---
 # FIXME: Remove this once components are updated to the latest version
-RUN pip install cryptography==46.0.5 pillow==12.2.0 
+RUN pip install cryptography==46.0.5 pillow==12.2.0
 
 # --- Additional forced dependency upgrades for CVEs: 2026-42561, 2026-44431, 2026-44432, and advisory: GHSA-82j2-j2ch-gfr8 ---
 # FIXME: Remove this once components are updated to the latest version
@@ -113,7 +113,7 @@ COPY --from=builder /tmp/nccl-profiler-otel-plugin/build/libnccl-profiler-otel.s
 
 RUN ( ldconfig || true )
 
-# --- Fail the build if the plugin has unresolved shared libraries (NCCL would silently skip it) ---
+# --- Fail the build if the plugin has unresolved shared libraries ---
 RUN ! LD_LIBRARY_PATH=/usr/local/plugins/lib ldd /usr/local/plugins/lib/libnccl-profiler-otel.so | grep "not found"
 
 # --- Set environment variables ---
