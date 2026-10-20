@@ -87,16 +87,16 @@ RUN apt-get install -y --no-install-recommends libprotobuf32t64 && \
 # --- Manually install Ray dependencies to avoid CVE-2026-0994 ---
 RUN pip install --upgrade protobuf==6.33.5
 
-# --- Manually install cryptography and pillow to avoid CVE-2026-26007, CVE-2026-25990 ---
+# --- Manually install cryptography to avoid CVE-2026-69247, CVE-2026-69249, GHSA-537c-gmf6-5ccf ---
 # FIXME: Remove this once components are updated to the latest version
-RUN pip install cryptography==46.0.5 pillow==12.2.0
+RUN pip install cryptography==50.0.2
 
-# --- Additional forced dependency upgrades for CVEs: 2026-42561, 2026-44431, 2026-44432, and advisory: GHSA-82j2-j2ch-gfr8 ---
+# --- Additional forced dependency upgrades for CVEs: 2026-53539, 2026-97687, 2026-97689, and advisory: GHSA-4w2j-m93h-cj5j (uv) ---
 # FIXME: Remove this once components are updated to the latest version
-RUN pip install --upgrade python-multipart==0.0.27 urllib3==2.7.0 uv==0.11.14
+RUN pip install --upgrade python-multipart==0.0.32 urllib3==2.8.0 uv==0.13.4
 
 # --- Install Ray (Python) ---
-RUN pip install "ray[default]==2.55.0"
+RUN pip install "ray[default]==2.59.0"
 
 # --- Pin the pip NCCL wheel (nvidia-nccl-cu12/cu13) to match the NCCL built above ---
 # torch loads its own pip NCCL, which may take precedence over /usr/local/plugins/lib.
