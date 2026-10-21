@@ -91,9 +91,9 @@ RUN pip install --upgrade protobuf==6.33.5
 # FIXME: Remove this once components are updated to the latest version
 RUN pip install cryptography==50.0.2
 
-# --- Additional forced dependency upgrades for CVEs: 2026-53539, 2026-97687, 2026-97689, and advisory: GHSA-4w2j-m93h-cj5j (uv) ---
+# --- Additional forced dependency upgrades for CVEs: 2026-53539, 2026-97687, 2026-97689, and advisories: GHSA-4w2j-m93h-cj5j (uv), GHSA-6q48-6c7w-9gw2 (certifi) ---
 # FIXME: Remove this once components are updated to the latest version
-RUN pip install --upgrade python-multipart==0.0.32 urllib3==2.8.0 uv==0.13.4
+RUN pip install --upgrade python-multipart==0.0.32 urllib3==2.8.0 uv==0.13.4 certifi==2026.10.19
 
 # --- Install Ray (Python) ---
 RUN pip install "ray[default]==2.59.0"
